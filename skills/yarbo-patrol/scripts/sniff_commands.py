@@ -41,19 +41,28 @@ def decode(payload: bytes):
 def main() -> None:
     ap = argparse.ArgumentParser(description="Passive Yarbo MQTT command sniffer")
     ap.add_argument("--broker", required=True, help="base station IP")
-    ap.add_argument("--sn", required=True, help="robot serial number")
+    ap.add_argument("--sn", help="unused (watches all topics); kept for "
+                                 "command-line compatibility")
     ap.add_argument("--all", action="store_true",
                     help="also show DeviceMSG/heart_beat telemetry spam")
     args = ap.parse_args()
 
+    seen_noisy: set[str] = set()
+
     def on_connect(client, userdata, flags, reason_code, properties=None):
-        print(f"Connected - watching snowbot/{args.sn}/# "
-              f"(trigger the action in the Yarbo app now)")
-        client.subscribe(f"snowbot/{args.sn}/#")
+        print("Connected - watching ALL topics on the broker "
+              "(trigger the action in the Yarbo app now)")
+        client.subscribe("#")
 
     def on_message(client, userdata, msg):
         leaf = msg.topic.rsplit("/", 1)[-1]
         if not args.all and leaf in NOISY_LEAVES:
+            # Announce each telemetry topic once - proves the broker is
+            # publishing and shows the robot's true topic root/SN
+            if msg.topic not in seen_noisy:
+                seen_noisy.add(msg.topic)
+                print(f"(telemetry flowing on {msg.topic} - hidden from "
+                      f"now on, use --all to see it)")
             return
         stamp = time.strftime("%H:%M:%S")
         body = decode(msg.payload)

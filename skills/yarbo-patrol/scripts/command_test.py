@@ -69,16 +69,10 @@ async def run(broker: str, sn: str, force: bool = False) -> int:
               "close the app and retry)...")
         await client.get_controller()
 
-        print("Buzzer test 1/2 (library helper) - listen for a beep...")
+        print("Buzzer test (cmd_buzzer state=1/0) - listen for a beep...")
         await client.buzzer(state=1)
         await asyncio.sleep(2)
         await client.buzzer(state=0)
-        await asyncio.sleep(1)
-
-        print("Buzzer test 2/2 (raw cmd_buzzer enable/disable) - listen again...")
-        await client.publish_raw("cmd_buzzer", {"enable": True})
-        await asyncio.sleep(2)
-        await client.publish_raw("cmd_buzzer", {"enable": False})
         await asyncio.sleep(1)
 
         print("Lights on...")
