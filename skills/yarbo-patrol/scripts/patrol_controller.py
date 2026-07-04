@@ -139,15 +139,11 @@ async def run_patrol(args: argparse.Namespace) -> int:
 
         await client.get_controller()
         await disarm_blades(client)
+        # Lights are the start-of-patrol announcement. No buzzer chirp:
+        # cmd_buzzer is silently ignored on tested firmware (the app's
+        # Find My Yarbo beep goes via Yarbo's cloud, not the local broker).
         if args.lights:
             await client.lights_on()
-        try:
-            # Start-of-patrol chirp; nice-to-have, never blocks the patrol
-            await client.buzzer(state=1)
-            await asyncio.sleep(1)
-            await client.buzzer(state=0)
-        except Exception as e:
-            log.warning("buzzer chirp failed (continuing): %s", e)
 
         log.info("starting plan %s", args.plan)
         await client.publish_raw("start_plan", {"plan": args.plan})

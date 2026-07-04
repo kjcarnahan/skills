@@ -14,7 +14,7 @@ Commands are published to `snowbot/{SN}/app/{cmd}` as JSON envelopes (`cmd`, `sn
 | `cmd_recharge` | Return to dock and charge |
 | `set_blade_speed` | Blade speed - **set to 0 before every patrol** (see [safety.md](safety.md)) |
 | `light_ctrl` | LED control - lights on for night patrols aid deterrence and the robot's own visibility |
-| `cmd_buzzer` | Audible chirp - useful as a start-of-patrol announcement |
+| `cmd_buzzer` | Buzzer on/off (`{"state": 1}`) - **silently ignored on tested firmware**; the app's Find My Yarbo beep travels via Yarbo's cloud, not the local broker, so do not rely on a local chirp |
 
 With `python-yarbo`, high-level helpers cover lights (`lights_on()`/`lights_off()`), buzzer (`buzzer()`), and telemetry; anything without a helper goes through `publish_raw(cmd, payload)`:
 
@@ -30,7 +30,7 @@ A single patrol run should always follow this sequence:
 
 1. **Preflight.** Read one telemetry snapshot. Require: `state == "idle"`, battery above the route's recorded consumption plus a 20-point margin, no error flags, robot docked or at a known position. Skip the patrol (and log why) if any check fails - never force it.
 2. **Disarm the tool.** `set_blade_speed` to 0. Confirm via telemetry before moving.
-3. **Announce.** Optional buzzer chirp and lights on (night patrols: always lights on).
+3. **Announce.** Lights on (night patrols: always). Lights are the announcement - the local buzzer command does not sound on tested firmware.
 4. **Start.** `start_plan` with the patrol route. Watch `plan_feedback` and `DeviceMSG` for confirmation that the plan actually started; if `state` is still idle after 30 s, retry once, then abort and alert.
 5. **Monitor.** Stream telemetry for the whole run - position, speed, battery, RTK fix, error flags. The watchdog rules live in [monitoring-and-alerts.md](monitoring-and-alerts.md).
 6. **Complete.** On plan completion (idle state near route end, or completion feedback), send `cmd_recharge` unless the route already ends at the dock. Log runtime, battery consumed, and any incidents.
