@@ -31,6 +31,23 @@ def fmt(value, spec: str = "") -> str:
     return format(value, spec)
 
 
+async def get_status_retry(client: YarboClient, timeout: float):
+    """get_status() can return None when no telemetry arrived - retry.
+
+    Returns a status object, or None if nothing arrived within timeout.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            status = await asyncio.wait_for(client.get_status(), timeout=5)
+        except (TimeoutError, asyncio.TimeoutError):
+            status = None
+        if status is not None:
+            return status
+        await asyncio.sleep(1)
+    return None
+
+
 async def discover() -> tuple[str, str] | None:
     from yarbo import discover_yarbo
     print("Scanning the local subnet for a Yarbo base station...")
@@ -54,10 +71,8 @@ async def check(broker: str, sn: str, watch_s: float) -> int:
     print(f"Connecting to mqtt://{broker}:1883 (sn={sn})...")
     try:
         async with YarboClient(broker=broker, sn=sn) as client:
-            try:
-                status = await asyncio.wait_for(
-                    client.get_status(), timeout=TELEMETRY_TIMEOUT_S)
-            except (TimeoutError, asyncio.TimeoutError):
+            status = await get_status_retry(client, TELEMETRY_TIMEOUT_S)
+            if status is None:
                 print(f"Connected, but no telemetry within {TELEMETRY_TIMEOUT_S}s.")
                 print("Most common cause: wrong serial number - the topic "
                       f"snowbot/{sn}/device/... never publishes. "

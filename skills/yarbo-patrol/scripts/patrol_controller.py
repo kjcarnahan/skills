@@ -50,8 +50,28 @@ def notify(level: str, message: str) -> None:
             "[%s] %s", level, message)
 
 
+async def get_status_retry(client: YarboClient, timeout: float = 20.0):
+    """get_status() can return None when no telemetry arrived - retry."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            status = await asyncio.wait_for(client.get_status(), timeout=5)
+        except (TimeoutError, asyncio.TimeoutError):
+            status = None
+        if status is not None:
+            return status
+        await asyncio.sleep(1)
+    return None
+
+
 async def preflight(client: YarboClient, min_battery: int) -> bool:
-    status = await client.get_status()
+    status = await get_status_retry(client)
+    if status is None:
+        notify("notify", "patrol skipped: no telemetry from robot")
+        return False
+    if status.battery is None:
+        notify("notify", "patrol skipped: battery level unknown")
+        return False
     if status.state != "idle":
         notify("info", f"patrol skipped: robot busy (state={status.state})")
         return False

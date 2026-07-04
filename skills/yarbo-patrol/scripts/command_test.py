@@ -19,13 +19,34 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import time
 
 from yarbo import YarboClient
+
+STATUS_TIMEOUT_S = 20
+
+
+async def get_status_retry(client: YarboClient, timeout: float = STATUS_TIMEOUT_S):
+    """get_status() can return None when no telemetry arrived - retry."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            status = await asyncio.wait_for(client.get_status(), timeout=5)
+        except (TimeoutError, asyncio.TimeoutError):
+            status = None
+        if status is not None:
+            return status
+        await asyncio.sleep(1)
+    return None
 
 
 async def run(broker: str, sn: str) -> int:
     async with YarboClient(broker=broker, sn=sn) as client:
-        status = await client.get_status()
+        status = await get_status_retry(client)
+        if status is None:
+            print(f"No telemetry within {STATUS_TIMEOUT_S}s - run "
+                  "check_connection.py first and fix connectivity.")
+            return 1
         print(f"Robot reachable: state={status.state} battery={status.battery}%")
         if status.state != "idle":
             print("Robot is not idle - aborting the test. Never send test "
@@ -50,7 +71,11 @@ async def run(broker: str, sn: str) -> int:
         await client.publish_raw("set_blade_speed", {"speed": 0})
         await asyncio.sleep(2)
 
-        status = await client.get_status()
+        status = await get_status_retry(client)
+        if status is None:
+            print("Warning: no status after the commands - telemetry gap, "
+                  "check the robot before proceeding.")
+            return 1
         print(f"Robot still healthy: state={status.state} battery={status.battery}%")
         print("\nDid you hear the beep and see the lights cycle? If yes, the")
         print("command path works - next step: a supervised patrol_controller.py")
