@@ -40,7 +40,7 @@ async def get_status_retry(client: YarboClient, timeout: float = STATUS_TIMEOUT_
     return None
 
 
-async def run(broker: str, sn: str) -> int:
+async def run(broker: str, sn: str, force: bool = False) -> int:
     async with YarboClient(broker=broker, sn=sn) as client:
         status = await get_status_retry(client)
         if status is None:
@@ -49,9 +49,21 @@ async def run(broker: str, sn: str) -> int:
             return 1
         print(f"Robot reachable: state={status.state} battery={status.battery}%")
         if status.state != "idle":
-            print("Robot is not idle - aborting the test. Never send test "
-                  "commands to a robot that is doing something.")
-            return 1
+            print("\nRobot does not report 'idle'. Raw state fields (to see "
+                  "what it thinks it's doing - docked/charging often reads "
+                  "as active):")
+            raw = status.raw if isinstance(getattr(status, "raw", None), dict) else {}
+            interesting = {k: v for k, v in raw.items()
+                           if any(s in k.lower() for s in
+                                  ("state", "charg", "dock", "work", "mode",
+                                   "task", "plan", "status"))}
+            print(f"  {interesting or raw or 'no raw telemetry available'}")
+            if not force:
+                print("\nIf the robot is physically parked/docked and not "
+                      "doing a job, re-run with --force. Never force this "
+                      "while it is actually moving or mid-job.")
+                return 1
+            print("\n--force given - proceeding.")
 
         print("Acquiring controller (fails if the Yarbo app holds it - "
               "close the app and retry)...")
@@ -99,9 +111,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Yarbo safe command test (no movement)")
     ap.add_argument("--broker", required=True, help="base station IP")
     ap.add_argument("--sn", required=True, help="robot serial number")
+    ap.add_argument("--force", action="store_true",
+                    help="proceed even if the robot does not report 'idle' "
+                         "(only when it is physically parked/docked)")
     args = ap.parse_args()
     try:
-        sys.exit(asyncio.run(run(args.broker, args.sn)))
+        sys.exit(asyncio.run(run(args.broker, args.sn, args.force)))
     except KeyboardInterrupt:
         sys.exit(130)
 
