@@ -64,7 +64,29 @@ async def get_status_retry(client: YarboClient, timeout: float = 20.0):
     return None
 
 
-async def preflight(client: YarboClient, min_battery: int) -> bool:
+def _looks_docked_charging(status) -> bool:
+    """Charging on the dock can report state 'active' on real firmware.
+
+    Detect it from raw battery telemetry: negative current = charging.
+    """
+    raw = status.raw if isinstance(getattr(status, "raw", None), dict) else {}
+    stack = [raw]
+    while stack:
+        node = stack.pop()
+        for key, val in node.items():
+            if isinstance(val, dict):
+                stack.append(val)
+            elif key.lower() in ("current", "chargecurrent", "charge_current"):
+                try:
+                    if float(val) < 0:
+                        return True
+                except (TypeError, ValueError):
+                    pass
+    return False
+
+
+async def preflight(client: YarboClient, min_battery: int,
+                    force: bool = False) -> bool:
     status = await get_status_retry(client)
     if status is None:
         notify("notify", "patrol skipped: no telemetry from robot")
@@ -73,8 +95,14 @@ async def preflight(client: YarboClient, min_battery: int) -> bool:
         notify("notify", "patrol skipped: battery level unknown")
         return False
     if status.state != "idle":
-        notify("info", f"patrol skipped: robot busy (state={status.state})")
-        return False
+        if _looks_docked_charging(status):
+            log.info("state=%s but battery current is negative - treating "
+                     "as docked+charging, proceeding", status.state)
+        elif force:
+            log.warning("state=%s, proceeding due to --force", status.state)
+        else:
+            notify("info", f"patrol skipped: robot busy (state={status.state})")
+            return False
     if status.battery < min_battery:
         notify("info", f"patrol skipped: battery {status.battery}% < {min_battery}%")
         return False
@@ -134,7 +162,7 @@ async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
 async def run_patrol(args: argparse.Namespace) -> int:
     async with YarboClient(broker=args.broker, sn=args.sn) as client:
         min_battery = BATTERY_FLOOR + PREFLIGHT_BATTERY_MARGIN + args.expected_battery_cost
-        if not await preflight(client, min_battery):
+        if not await preflight(client, min_battery, force=args.force):
             return 1
 
         await client.get_controller()
@@ -185,6 +213,11 @@ def main() -> None:
     ap.add_argument("--expected-battery-cost", type=int, default=15,
                     help="battery percent the route normally consumes")
     ap.add_argument("--lights", action="store_true", help="lights on for the run")
+    ap.add_argument("--force", action="store_true",
+                    help="proceed when the robot does not report 'idle' - "
+                         "only for supervised runs with the robot physically "
+                         "parked (docked+charging is auto-detected and never "
+                         "needs this)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
