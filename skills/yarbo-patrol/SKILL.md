@@ -27,4 +27,11 @@ Read individual rule files for detailed explanations and examples:
 - [rules/safety.md](rules/safety.md) - Blades off during patrol, emergency stop, people and pets, legal and privacy considerations
 - [rules/home-assistant.md](rules/home-assistant.md) - Running patrols through the community_yarbo Home Assistant integration and blueprints
 
-A complete working patrol controller is provided at [scripts/patrol_controller.py](scripts/patrol_controller.py).
+## Scripts
+
+Setup and testing are staged so each step proves one layer before anything moves:
+
+- [scripts/setup.sh](scripts/setup.sh) - Install dependencies and verify the environment (Linux, macOS, Raspberry Pi, Termux)
+- [scripts/check_connection.py](scripts/check_connection.py) - Read-only connectivity check: status snapshot plus a live telemetry stream, sends no commands
+- [scripts/command_test.py](scripts/command_test.py) - Safe command-path test: buzzer, lights, and the blades-off preflight command - no movement
+- [scripts/patrol_controller.py](scripts/patrol_controller.py) - Complete patrol controller: preflight, blade disarm, plan start, watchdogs, dock on completion or abort

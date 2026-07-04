@@ -1,5 +1,20 @@
 # Setup and connectivity
 
+## Quickstart
+
+The scripts directory contains everything for initial setup and a safe, staged first test:
+
+```bash
+cd skills/yarbo-patrol/scripts
+bash setup.sh                                            # install deps (Termux-aware)
+python3 check_connection.py --broker <ip> --sn <serial>  # read-only: telemetry check
+python3 command_test.py --broker <ip> --sn <serial>      # buzzer + lights, no movement
+python3 patrol_controller.py --broker <ip> --sn <serial> \
+    --plan patrol-test --expected-runtime 300 --lights -v  # first supervised patrol
+```
+
+Run the stages in order and don't skip ahead: each one proves a layer (network -> telemetry -> command path -> movement) so a failure is easy to localize. Create the short `patrol-test` plan in the Yarbo app before the last step, and stand near the robot for it.
+
 ## Prerequisites
 
 - A Yarbo robot paired with its base station (data center) and mapped in the Yarbo app.
