@@ -141,7 +141,13 @@ async def run_patrol(args: argparse.Namespace) -> int:
         await disarm_blades(client)
         if args.lights:
             await client.lights_on()
-        await client.buzzer(state=1)
+        try:
+            # Start-of-patrol chirp; nice-to-have, never blocks the patrol
+            await client.publish_raw("cmd_buzzer", {"enable": True})
+            await asyncio.sleep(1)
+            await client.publish_raw("cmd_buzzer", {"enable": False})
+        except Exception as e:
+            log.warning("buzzer chirp failed (continuing): %s", e)
 
         log.info("starting plan %s", args.plan)
         await client.publish_raw("start_plan", {"plan": args.plan})

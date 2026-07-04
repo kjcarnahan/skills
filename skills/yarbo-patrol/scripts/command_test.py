@@ -57,9 +57,17 @@ async def run(broker: str, sn: str) -> int:
               "close the app and retry)...")
         await client.get_controller()
 
-        print("Buzzer chirp - you should hear a beep...")
+        print("Buzzer test 1/2 (library helper) - listen for a beep...")
         await client.buzzer(state=1)
         await asyncio.sleep(2)
+        await client.buzzer(state=0)
+        await asyncio.sleep(1)
+
+        print("Buzzer test 2/2 (raw cmd_buzzer enable/disable) - listen again...")
+        await client.publish_raw("cmd_buzzer", {"enable": True})
+        await asyncio.sleep(2)
+        await client.publish_raw("cmd_buzzer", {"enable": False})
+        await asyncio.sleep(1)
 
         print("Lights on...")
         await client.lights_on()
@@ -77,9 +85,13 @@ async def run(broker: str, sn: str) -> int:
                   "check the robot before proceeding.")
             return 1
         print(f"Robot still healthy: state={status.state} battery={status.battery}%")
-        print("\nDid you hear the beep and see the lights cycle? If yes, the")
-        print("command path works - next step: a supervised patrol_controller.py")
-        print("run on a short 'patrol-test' plan, standing near the robot.")
+        print("\nDid you see the lights cycle and hear at least one beep?")
+        print("Lights + blade-disarm passing is what matters for patrols; the")
+        print("beep is only the start announcement. Note which buzzer test (if")
+        print("any) beeped, and check the mute toggle next to the volume slider")
+        print("in Yarbo Settings if neither did.")
+        print("Next step: a supervised patrol_controller.py run on a short")
+        print("'patrol-test' plan, standing near the robot.")
         return 0
 
 
