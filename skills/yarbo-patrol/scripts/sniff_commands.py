@@ -48,13 +48,38 @@ def main() -> None:
     args = ap.parse_args()
 
     seen_noisy: set[str] = set()
+    recent: dict[tuple, float] = {}  # dedup across overlapping filters
+    # Several patterns because the broker may deny wide wildcards by ACL;
+    # whichever it grants still catches app->robot commands.
+    sub_filters = ["#", "snowbot/#", "+/+/app/+", "+/+/device/+"]
 
     def on_connect(client, userdata, flags, reason_code, properties=None):
-        print("Connected - watching ALL topics on the broker "
-              "(trigger the action in the Yarbo app now)")
-        client.subscribe("#")
+        print("Connected - requesting subscriptions "
+              "(trigger the action in the Yarbo app once granted)")
+        for f in sub_filters:
+            client.subscribe(f)
+
+    def on_subscribe(client, userdata, mid, reason_codes, properties=None):
+        for rc in reason_codes:
+            granted = getattr(rc, "is_failure", None)
+            if granted is None:  # paho 1.x gives plain ints (128 = denied)
+                ok = int(rc) < 128
+            else:
+                ok = not rc.is_failure
+            print(f"  subscription {'granted' if ok else 'DENIED by broker'} "
+                  f"({rc})")
 
     def on_message(client, userdata, msg):
+        # Overlapping filters can deliver the same message more than once
+        now = time.monotonic()
+        key = (msg.topic, bytes(msg.payload))
+        for k, ts in list(recent.items()):
+            if now - ts > 1.0:
+                del recent[k]
+        if key in recent:
+            return
+        recent[key] = now
+
         leaf = msg.topic.rsplit("/", 1)[-1]
         if not args.all and leaf in NOISY_LEAVES:
             # Announce each telemetry topic once - proves the broker is
@@ -75,6 +100,7 @@ def main() -> None:
     except (AttributeError, TypeError):  # paho-mqtt 1.x
         client = mqtt.Client()
     client.on_connect = on_connect
+    client.on_subscribe = on_subscribe
     client.on_message = on_message
     try:
         client.connect(args.broker, 1883, keepalive=30)
