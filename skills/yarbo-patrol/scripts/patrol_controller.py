@@ -85,7 +85,8 @@ async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
 
         if now - started > ceiling:
             raise PatrolAbort(f"runtime ceiling hit ({ceiling:.0f}s)")
-        if t.battery < BATTERY_FLOOR:
+        # Telemetry fields can be None when the robot hasn't reported them yet
+        if t.battery is not None and t.battery < BATTERY_FLOOR:
             raise PatrolAbort(f"battery floor hit ({t.battery}%)")
 
         if t.state == "active":
@@ -97,6 +98,8 @@ async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
             raise PatrolAbort("plan never started (still idle)")
 
         # Stuck detection: displacement over a rolling window while active
+        if t.position_x is None or t.position_y is None:
+            continue
         positions.append((now, t.position_x, t.position_y))
         positions = [p for p in positions if now - p[0] <= STUCK_WINDOW_S]
         if seen_active and t.state == "active" and now - positions[0][0] >= STUCK_WINDOW_S:

@@ -24,6 +24,13 @@ from yarbo import YarboClient
 TELEMETRY_TIMEOUT_S = 20
 
 
+def fmt(value, spec: str = "") -> str:
+    """Format a telemetry field that may be None (not yet reported)."""
+    if value is None:
+        return "n/a"
+    return format(value, spec)
+
+
 async def discover() -> tuple[str, str] | None:
     from yarbo import discover_yarbo
     print("Scanning the local subnet for a Yarbo base station...")
@@ -58,11 +65,12 @@ async def check(broker: str, sn: str, watch_s: float) -> int:
                 return 1
 
             print("\n--- Status snapshot ---")
-            print(f"  state:    {status.state}")
-            print(f"  battery:  {status.battery}%")
-            print(f"  position: ({status.position_x:.2f}, {status.position_y:.2f}) m")
-            print(f"  heading:  {status.heading:.1f} deg")
-            print(f"  speed:    {status.speed:.2f} m/s")
+            print(f"  state:    {fmt(status.state)}")
+            print(f"  battery:  {fmt(status.battery)}%")
+            print(f"  position: ({fmt(status.position_x, '.2f')}, "
+                  f"{fmt(status.position_y, '.2f')}) m")
+            print(f"  heading:  {fmt(status.heading, '.1f')} deg")
+            print(f"  speed:    {fmt(status.speed, '.2f')} m/s")
 
             print(f"\n--- Live telemetry for {watch_s:.0f}s (Ctrl-C to stop) ---")
             n = 0
@@ -76,9 +84,9 @@ async def check(broker: str, sn: str, watch_s: float) -> int:
                 except (TimeoutError, asyncio.TimeoutError):
                     break
                 n += 1
-                print(f"  battery={t.battery}% state={t.state} "
-                      f"pos=({t.position_x:.2f},{t.position_y:.2f}) "
-                      f"speed={t.speed:.2f}")
+                print(f"  battery={fmt(t.battery)}% state={fmt(t.state)} "
+                      f"pos=({fmt(t.position_x, '.2f')},{fmt(t.position_y, '.2f')}) "
+                      f"speed={fmt(t.speed, '.2f')}")
             rate = n / watch_s if watch_s else 0.0
             print(f"\nReceived {n} messages (~{rate:.1f}/s; healthy is 1-2/s).")
             if n == 0:
