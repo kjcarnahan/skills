@@ -10,10 +10,10 @@ bash setup.sh                                            # install deps (Termux-
 python3 check_connection.py --broker <ip> --sn <serial>  # read-only: telemetry check
 python3 command_test.py --broker <ip> --sn <serial>      # buzzer + lights, no movement
 python3 patrol_controller.py --broker <ip> --sn <serial> \
-    --plan patrol-test --expected-runtime 300 --lights -v  # first supervised patrol
+    --plan <planId> --expected-runtime 300 --lights -v  # first supervised patrol
 ```
 
-Run the stages in order and don't skip ahead: each one proves a layer (network -> telemetry -> command path -> movement) so a failure is easy to localize. Create the short `patrol-test` plan in the Yarbo app before the last step, and stand near the robot for it.
+Run the stages in order and don't skip ahead: each one proves a layer (network -> telemetry -> command path -> movement) so a failure is easy to localize. Before the last step: create a short test plan in the Yarbo app, run it once from the app with `sniff_commands.py` watching, and note the numeric `planId` from the `plan_feedback` messages - that id (not the plan's name) is what `--plan` takes. Stand near the robot for the first supervised run.
 
 ## Prerequisites
 

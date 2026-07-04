@@ -187,8 +187,11 @@ async def run_patrol(args: argparse.Namespace) -> int:
         if args.lights:
             await client.lights_on()
 
-        log.info("starting plan %s", args.plan)
-        await client.publish_raw("start_plan", {"plan": args.plan})
+        # The robot identifies plans by planId (visible in plan_feedback
+        # when the plan runs), not by the display name from the app.
+        plan_ref = int(args.plan) if str(args.plan).isdigit() else args.plan
+        log.info("starting plan planId=%r", plan_ref)
+        await client.publish_raw("start_plan", {"planId": plan_ref, "percent": 100})
 
         try:
             await asyncio.wait_for(
@@ -222,7 +225,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run one Yarbo patrol")
     ap.add_argument("--broker", required=True, help="base station IP")
     ap.add_argument("--sn", required=True, help="robot serial number")
-    ap.add_argument("--plan", required=True, help="saved plan name, e.g. patrol-perimeter")
+    ap.add_argument("--plan", required=True,
+                    help="numeric planId of the saved plan (find it in "
+                         "plan_feedback via sniff_commands.py while the plan "
+                         "runs once from the app)")
     ap.add_argument("--expected-runtime", type=float, required=True,
                     help="normal route runtime in seconds (from route verification)")
     ap.add_argument("--expected-battery-cost", type=int, default=15,

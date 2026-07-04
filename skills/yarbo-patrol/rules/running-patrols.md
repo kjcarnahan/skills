@@ -19,8 +19,10 @@ Commands are published to `snowbot/{SN}/app/{cmd}` as JSON envelopes (`cmd`, `sn
 With `python-yarbo`, high-level helpers cover lights (`lights_on()`/`lights_off()`), buzzer (`buzzer()`), and telemetry; anything without a helper goes through `publish_raw(cmd, payload)`:
 
 ```python
-await client.publish_raw("start_plan", {"plan": "patrol-perimeter"})
+await client.publish_raw("start_plan", {"planId": 3, "percent": 100})
 ```
+
+Plans are identified by **numeric `planId`**, not by their display name in the app (verified on real hardware - a name in the payload is silently ignored). To find a plan's id: run `scripts/sniff_commands.py`, start the plan once from the app, and read `planId` out of the `plan_feedback` messages. Newer `python-yarbo` versions also expose `client.start_plan(plan_id)` directly.
 
 Acquire the controller (`get_controller()`) before sending drive-affecting commands - the robot accepts commands from one controller at a time, and this avoids fighting the app if someone has it open.
 
