@@ -268,25 +268,25 @@ async def run_patrol(args: argparse.Namespace) -> int:
         # variants until plan_feedback confirms the plan is running.
         plan_ref = int(args.plan) if str(args.plan).isdigit() else args.plan
         plans = PlanMonitor(args.broker, args.sn)
+        # percent appears to be the already-completed fraction (a resume
+        # point): the HA integration starts plans with percent=0, and
+        # percent=100 is silently ignored (verified on real hardware).
         attempts: list[tuple[str, object]] = []
+        lib_direct = getattr(client, "start_plan_direct", None)
+        if lib_direct is not None and isinstance(plan_ref, int):
+            attempts.append(("library client.start_plan_direct(percent=0)",
+                             lambda: lib_direct(plan_ref, percent=0)))
+        attempts.append(
+            ("raw planId+percent=0",
+             lambda: client.publish_raw("start_plan",
+                                        {"planId": plan_ref, "percent": 0})))
         lib_start = getattr(client, "start_plan", None)
         if lib_start is not None:
             attempts.append(("library client.start_plan()",
                              lambda: lib_start(str(plan_ref))))
-        lib_direct = getattr(client, "start_plan_direct", None)
-        if lib_direct is not None and isinstance(plan_ref, int):
-            attempts.append(("library client.start_plan_direct()",
-                             lambda: lib_direct(plan_ref, percent=100)))
-        attempts += [
-            ("raw planId+percent",
-             lambda: client.publish_raw("start_plan",
-                                        {"planId": plan_ref, "percent": 100})),
+        attempts.append(
             ("raw planId only",
-             lambda: client.publish_raw("start_plan", {"planId": plan_ref})),
-            ("raw planId as string",
-             lambda: client.publish_raw("start_plan",
-                                        {"planId": str(plan_ref)})),
-        ]
+             lambda: client.publish_raw("start_plan", {"planId": plan_ref})))
 
         plan_started = False
         for label, attempt in attempts:

@@ -34,4 +34,6 @@ Setup and testing are staged so each step proves one layer before anything moves
 - [scripts/setup.sh](scripts/setup.sh) - Install dependencies and verify the environment (Linux, macOS, Raspberry Pi, Termux)
 - [scripts/check_connection.py](scripts/check_connection.py) - Read-only connectivity check: status snapshot plus a live telemetry stream, sends no commands
 - [scripts/command_test.py](scripts/command_test.py) - Safe command-path test: buzzer, lights, and the blades-off preflight command - no movement
+- [scripts/list_plans.py](scripts/list_plans.py) - List saved plans (id, name) via read_all_plans; these ids are what the patrol controller takes
+- [scripts/sniff_commands.py](scripts/sniff_commands.py) - Passive MQTT watcher for protocol discovery and debugging
 - [scripts/patrol_controller.py](scripts/patrol_controller.py) - Complete patrol controller: preflight, blade disarm, plan start, watchdogs, dock on completion or abort
