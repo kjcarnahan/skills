@@ -86,14 +86,15 @@ def _looks_docked_charging(status) -> bool:
 
 
 async def preflight(client: YarboClient, min_battery: int,
-                    force: bool = False) -> bool:
+                    force: bool = False):
+    """Return the robot's status if the patrol may start, else None."""
     status = await get_status_retry(client)
     if status is None:
         notify("notify", "patrol skipped: no telemetry from robot")
-        return False
+        return None
     if status.battery is None:
         notify("notify", "patrol skipped: battery level unknown")
-        return False
+        return None
     if status.state != "idle":
         if _looks_docked_charging(status):
             log.info("state=%s but battery current is negative - treating "
@@ -102,11 +103,11 @@ async def preflight(client: YarboClient, min_battery: int,
             log.warning("state=%s, proceeding due to --force", status.state)
         else:
             notify("info", f"patrol skipped: robot busy (state={status.state})")
-            return False
+            return None
     if status.battery < min_battery:
         notify("info", f"patrol skipped: battery {status.battery}% < {min_battery}%")
-        return False
-    return True
+        return None
+    return status
 
 
 async def disarm_blades(client: YarboClient) -> None:
@@ -115,12 +116,14 @@ async def disarm_blades(client: YarboClient) -> None:
     await asyncio.sleep(2)
 
 
-async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
+async def watch_patrol(client: YarboClient, expected_runtime: float,
+                       initial_battery: int | None = None) -> None:
     """Stream telemetry until the plan completes; raise PatrolAbort on trip."""
     started = time.monotonic()
     ceiling = expected_runtime * RUNTIME_CEILING_FACTOR
     positions: list[tuple[float, float, float]] = []  # (t, x, y)
     seen_active = False
+    last_battery = initial_battery
 
     stream = client.watch_telemetry()
     while True:
@@ -133,9 +136,19 @@ async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
 
         if now - started > ceiling:
             raise PatrolAbort(f"runtime ceiling hit ({ceiling:.0f}s)")
-        # Telemetry fields can be None when the robot hasn't reported them yet
-        if t.battery is not None and t.battery < BATTERY_FLOOR:
-            raise PatrolAbort(f"battery floor hit ({t.battery}%)")
+        # Telemetry fields can be None when the robot hasn't reported them
+        # yet, and real firmware occasionally emits zeroed junk frames - an
+        # implausible drop (>30 points in one frame) is a glitch, not a
+        # battery, so ignore it rather than aborting on it.
+        if t.battery is not None:
+            if (last_battery is not None
+                    and last_battery - t.battery > 30):
+                log.debug("ignoring implausible battery reading %s%% "
+                          "(last good %s%%)", t.battery, last_battery)
+            else:
+                last_battery = t.battery
+                if t.battery < BATTERY_FLOOR:
+                    raise PatrolAbort(f"battery floor hit ({t.battery}%)")
 
         if t.state == "active":
             seen_active = True
@@ -162,7 +175,8 @@ async def watch_patrol(client: YarboClient, expected_runtime: float) -> None:
 async def run_patrol(args: argparse.Namespace) -> int:
     async with YarboClient(broker=args.broker, sn=args.sn) as client:
         min_battery = BATTERY_FLOOR + PREFLIGHT_BATTERY_MARGIN + args.expected_battery_cost
-        if not await preflight(client, min_battery, force=args.force):
+        start_status = await preflight(client, min_battery, force=args.force)
+        if start_status is None:
             return 1
 
         await client.get_controller()
@@ -178,7 +192,8 @@ async def run_patrol(args: argparse.Namespace) -> int:
 
         try:
             await asyncio.wait_for(
-                watch_patrol(client, args.expected_runtime),
+                watch_patrol(client, args.expected_runtime,
+                             initial_battery=start_status.battery),
                 timeout=args.expected_runtime * RUNTIME_CEILING_FACTOR + 120,
             )
         except PatrolAbort as e:
